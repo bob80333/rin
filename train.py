@@ -56,7 +56,7 @@ def ddpm_step_lucidrains(x_t, eps_pred, t_now, t_next):
     x_start.clamp_(-1., 1.)
     
     # get predicted noise
-    pred_noise = safe_div(img - alpha_now * x_start, sigma_now)
+    pred_noise = safe_div(x_t - alpha_now * x_start, sigma_now)
     
     # calculate next x_t
     x_next = x_start * alpha_next + pred_noise * sigma_next
