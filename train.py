@@ -78,7 +78,7 @@ def generate(steps, noise, latents, model):
 if __name__ == "__main__":
 
     # similar to CIFAR-10 config from authors
-    model = RIN(img_size=32, patch_size=4, num_latents=127, latent_dim=384, embed_dim=128, num_blocks=3, num_layers_per_block=2).to('cuda')
+    model = RIN(img_size=32, patch_size=2, num_latents=127, latent_dim=512, embed_dim=128, num_blocks=3, num_layers_per_block=2).to('cuda')
 
     tf = transforms.Compose([
         transforms.ToTensor(),
@@ -127,10 +127,12 @@ if __name__ == "__main__":
         pbar.set_description(f"loss: {loss.item():.4f}")
         
         if i % 200 == 0:
+            model.eval()
             noise = torch.randn_like(batch[:16]).to('cuda')
-            latents = torch.zeros(16, 127, 384).to('cuda')
+            latents = torch.zeros(16, 127, 512).to('cuda')
             with torch.no_grad():
                 images = generate(400, noise, latents, model)
             images = images.cpu() * 0.5 + 0.5
             torchvision.utils.save_image(images, f"images/{i}.png", nrow=4)
+            model.train()
         
