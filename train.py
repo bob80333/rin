@@ -19,7 +19,7 @@ def infinite_generator(dataloader):
 def gamma(t, ns=0.0002, ds=0.00025):
     return torch.cos(((t + ns) / (1 + ds)) * np.pi / 2)**2
 
-def ddpm_step(x_t, x_pred, t_now, t_next):
+def ddpm_step(x_t, eps_pred, t_now, t_next):
     # Estimate x at t_next with DDPM updating rule
     t_now = torch.tensor(t_now, device='cuda')
     t_next = torch.tensor(t_next, device='cuda')
@@ -27,9 +27,11 @@ def ddpm_step(x_t, x_pred, t_now, t_next):
     alpha_now = gamma(t_now) / gamma(t_next)
     sigma_now = torch.sqrt(1 - alpha_now)
     z = torch.randn_like(x_t)
-    x_pred = torch.clip(x_pred, -1, 1)
-    eps = (1 / (torch.sqrt(1 - gamma_now))) * (x_t - torch.sqrt(gamma_now) * x_pred)
-    x_next = (1 / torch.sqrt(alpha_now)) * (x_t - ((1 - alpha_now)/(torch.sqrt(1 - gamma_now))) * eps) + sigma_now * z
+    #x_pred = (x_t - sigma_now * eps_pred) / alpha_now
+    #x_pred = torch.clip(x_pred, -1, 1)
+    #eps = (1 / (torch.sqrt(1 - gamma_now))) * (x_t - torch.sqrt(gamma_now) * x_pred)
+    eps_pred = torch.clip(eps_pred, -1., 1.)
+    x_next = (1 / torch.sqrt(alpha_now)) * (x_t - ((1 - alpha_now)/(torch.sqrt(1 - gamma_now))) * eps_pred) + sigma_now * z
     return x_next
 
 def generate(steps, noise, latents, model):
