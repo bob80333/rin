@@ -33,6 +33,32 @@ def ddpm_step(x_t, eps_pred, t_now, t_next):
     eps_pred = torch.clip(eps_pred, -1., 1.)
     x_next = (1 / torch.sqrt(alpha_now)) * (x_t - ((1 - alpha_now)/(torch.sqrt(1 - gamma_now))) * eps_pred) + sigma_now * z
     return x_next
+    
+# based off of ddpm step code in lucidrains RIN repo, since can't tell if bug in sampling or model sucks
+def gamma_to_alpha_sigma(gamma, scale = 1):
+    return torch.sqrt(gamma) * scale, torch.sqrt(1 - gamma)
+
+def safe_div(numer, denom, eps = 1e-10):
+    return numer / denom.clamp(min = eps)
+    
+def ddpm_step_lucidrains(x_t, eps_pred, t_now, t_next):
+    gamma_now = gamma(t_now)
+    gamma_next = gamma(t_next)
+    alpha_now, sigma_now = gamma_to_alpha_sigma(gamma_now)
+    alpha_next, sigma_next = gamma_to_alpha_sigma(gamma_next)
+    
+    # convert eps into x_0
+    x_start = safe_div(x_t - sigma_now * eps_pred, alpha_now)
+    
+    # clip
+    x_start.clamp_(-1., 1.)
+    
+    # get predicted noise
+    pred_noise = safe_div(img - alpha_now * x_start, sigma_now)
+    
+    # calculate next x_t
+    x_next = x_start * alpha_next + pred_noise * sigma_next
+    return x_next
 
 def generate(steps, noise, latents, model):
     x_t = noise
@@ -44,7 +70,7 @@ def generate(steps, noise, latents, model):
         # Predict eps.
         eps_pred, latents = model(x_t, timestep, latents)
         # Estimate x at t_m1.
-        x_t = ddpm_step(x_t, eps_pred, t, t_m1)
+        x_t = ddpm_step_lucidrains(x_t, eps_pred, t, t_m1)
     return x_t
     
 if __name__ == "__main__":
