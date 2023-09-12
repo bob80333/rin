@@ -126,7 +126,7 @@ if __name__ == "__main__":
         
         pbar.set_description(f"loss: {loss.item():.4f}")
         
-        if i % 200 == 0:
+        if i % 500 == 0:
             model.eval()
             noise = torch.randn_like(batch[:16]).to('cuda')
             latents = torch.zeros(16, 127, 512).to('cuda')
