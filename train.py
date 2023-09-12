@@ -42,6 +42,8 @@ def safe_div(numer, denom, eps = 1e-10):
     return numer / denom.clamp(min = eps)
     
 def ddpm_step_lucidrains(x_t, eps_pred, t_now, t_next):
+    t_now = torch.tensor(t_now, device='cuda')
+    t_next = torch.tensor(t_next, device='cuda')
     gamma_now = gamma(t_now)
     gamma_next = gamma(t_next)
     alpha_now, sigma_now = gamma_to_alpha_sigma(gamma_now)
