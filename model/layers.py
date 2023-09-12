@@ -95,3 +95,49 @@ class FourierFeatures(nn.Module):
     def forward(self, input):
         f = 2 * math.pi * input @ self.weight.T
         return torch.cat([f.cos(), f.sin()], dim=-1)
+        
+        
+# based on authors code in pix2seq repo
+
+def get_angles(pos, i, dim):
+  angle_rates = 1 / torch.pow(10000., (2 * (i//2)).float() / dim)
+  return pos.float() * angle_rates.float()
+
+def positional_encoding(coords, dim):
+  """coords in (bsz, size), return (bsz, size, dim)."""
+  angle_rads = get_angles(coords.unsqueeze(-1),
+                          torch.arange(dim)[None, None, :].to(coords.device),
+                          dim)
+  # apply sin to even indices in the array; 2i
+  angle_rads1 = torch.sin(angle_rads[:, :, 0::2])
+
+  # apply cos to odd indices in the array; 2i+1
+  angle_rads2 = torch.cos(angle_rads[:, :, 1::2])
+
+  pos_encoding = torch.cat([angle_rads1, angle_rads2], -1)
+
+  return pos_encoding.float()
+
+class ScalarEmbedding(nn.Module):
+    def __init__(self, in_features, out_features, normalize=True, scaling=1e4):
+        super().__init__()
+        self.scaling = scaling
+        self.normalize = normalize
+        self.out_features = out_features
+        
+        self.fc1 = nn.Linear(out_features, out_features)
+        self.silu1 = nn.SiLU()
+        self.fc2 = nn.Linear(out_features, out_features)
+        
+    def forward(self, x):
+        x = positional_encoding(x*self.scaling, self.out_features)
+        if self.normalize:
+            x_mean = x.mean(dim=-1, keepdim=True)
+            x_std = x.std(dim=-1, keepdim=True)
+            x = (x - x_mean) / x_std
+        x = self.fc1(x)
+        x = self.silu1(x)
+        x = self.fc2(x)
+        return x
+        
+        

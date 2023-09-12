@@ -1,4 +1,4 @@
-from model.layers import WriteBlock, ReadBlock, ComputationBlock, FFN, FourierFeatures
+from model.layers import WriteBlock, ReadBlock, ComputationBlock, FFN, ScalarEmbedding
 
 import torch
 import torch.nn as nn
@@ -51,7 +51,7 @@ class RIN(nn.Module):
         self.prev_latents_ffn = FFN(self.latent_dim, dropout=0.0)
         self.prev_latents_ln = nn.LayerNorm(self.latent_dim)
         
-        self.timestep_embed = FourierFeatures(1, self.latent_dim)
+        self.timestep_embed = ScalarEmbedding(1, self.latent_dim)
         
         self.blocks = nn.ModuleList()
         
@@ -74,7 +74,7 @@ class RIN(nn.Module):
             latents = latents + self.prev_latents_ln(prev_latents)
             
         # add timestep   
-        ts_embed = self.timestep_embed(timestep).squeeze(2)
+        ts_embed = self.timestep_embed(timestep[:, None])
         
         latents = torch.concat([latents, ts_embed], dim=1)
             
