@@ -42,8 +42,8 @@ def gamma(t, ns=0.0002, ds=0.00025):
 
 def ddpm_step(x_t, eps_pred, t_now, t_next):
     # Estimate x at t_next with DDPM updating rule
-    t_now = torch.tensor(t_now, device='cuda')
-    t_next = torch.tensor(t_next, device='cuda')
+    t_now = torch.tensor(t_now, device=device)
+    t_next = torch.tensor(t_next, device=device)
     gamma_now = gamma(t_now)
     alpha_now = gamma(t_now) / gamma(t_next)
     sigma_now = torch.sqrt(1 - alpha_now)
@@ -63,8 +63,8 @@ def safe_div(numer, denom, eps = 1e-10):
     return numer / denom.clamp(min = eps)
     
 def ddpm_step_lucidrains(x_t, eps_pred, t_now, t_next):
-    t_now = torch.tensor(t_now, device='cuda')
-    t_next = torch.tensor(t_next, device='cuda')
+    t_now = torch.tensor(t_now, device=device)
+    t_next = torch.tensor(t_next, device=device)
     gamma_now = gamma(t_now)
     gamma_next = gamma(t_next)
     alpha_now, sigma_now = gamma_to_alpha_sigma(gamma_now)
@@ -88,7 +88,7 @@ def generate(steps, noise, latents, model, conditioning):
     for step in trange(steps):
         # Get time for current and next states.
         t = 1 - step / steps
-        timestep = torch.ones(x_t.shape[0], device='cuda') * t
+        timestep = torch.ones(x_t.shape[0], device=device) * t
         t_m1 = max(1 - (step + 1) / steps, 0)
         # Predict eps.
         eps_pred, latents = model(x_t, timestep, conditioning, latents)
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     optim = AdamW(model.parameters(), lr=3e-4, weight_decay=1e-2, betas=(0.9, 0.99))
     loss_fn = torch.nn.MSELoss()
 
-    n_steps = 100_001
+    n_steps = 1_001
 
     pbar = trange(n_steps)
 
@@ -126,8 +126,8 @@ if __name__ == "__main__":
         labels = labels.to('cuda')
         batch = batch * 2 - 1
         
-        timestep = torch.rand(batch.shape[0]).to('cuda')
-        noise = torch.randn_like(batch).to('cuda')
+        timestep = torch.rand(batch.shape[0]).to(device)
+        noise = torch.randn_like(batch).to(device)
         
         noised_batch = torch.sqrt(gamma(timestep[:, None, None, None])) * batch + torch.sqrt(1 - gamma(timestep[:, None, None, None])) * noise
         
