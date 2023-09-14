@@ -62,7 +62,7 @@ def ddpm_step_lucidrains(x_t, eps_pred, t_now, t_next):
     x_next = x_start * alpha_next + pred_noise * sigma_next
     return x_next
 
-def generate(steps, noise, latents, model):
+def generate(steps, noise, latents, model, conditioning):
     x_t = noise
     for step in trange(steps):
         # Get time for current and next states.
@@ -70,7 +70,7 @@ def generate(steps, noise, latents, model):
         timestep = torch.ones(x_t.shape[0], device='cuda') * t
         t_m1 = max(1 - (step + 1) / steps, 0)
         # Predict eps.
-        eps_pred, latents = model(x_t, timestep, latents)
+        eps_pred, latents = model(x_t, timestep, conditioning, latents)
         # Estimate x at t_m1.
         x_t = ddpm_step_lucidrains(x_t, eps_pred, t, t_m1)
     return x_t
@@ -78,7 +78,7 @@ def generate(steps, noise, latents, model):
 if __name__ == "__main__":
 
     # similar to CIFAR-10 config from authors
-    model = RIN(img_size=32, patch_size=2, num_latents=127, latent_dim=512, embed_dim=128, num_blocks=3, num_layers_per_block=2).to('cuda')
+    model = RIN(img_size=32, patch_size=2, num_latents=126, latent_dim=512, embed_dim=128, num_blocks=3, num_layers_per_block=2).to('cuda')
 
     tf = transforms.Compose([
         transforms.ToTensor(),
@@ -97,7 +97,9 @@ if __name__ == "__main__":
 
     for i in pbar:
         # get only images, ignore labels
-        batch = next(generator)[0].to('cuda')
+        batch, labels = next(generator)
+        batch = batch.to('cuda')
+        labels = labels.to('cuda')
         batch = batch * 2 - 1
         
         timestep = torch.rand(batch.shape[0]).to('cuda')
@@ -108,14 +110,14 @@ if __name__ == "__main__":
         if torch.rand(1) < 0.9:
             # self conditioning
             with torch.no_grad():
-                _, latents = model(noised_batch, timestep)
+                _, latents = model(noised_batch, timestep, labels)
             
         else:
             latents = None
             
         optim.zero_grad()
         #print(latents.shape)
-        pred, _ = model(noised_batch, timestep, latents)
+        pred, _ = model(noised_batch, timestep, labels, latents)
         
         # eps style (predicting noise) as in paper, but supposedly v-pred is usually better (try later?)
         
@@ -128,10 +130,11 @@ if __name__ == "__main__":
         
         if i % 500 == 0:
             model.eval()
-            noise = torch.randn_like(batch[:16]).to('cuda')
-            latents = torch.zeros(16, 127, 512).to('cuda')
+            noise = torch.randn_like(batch[:10]).to('cuda')
+            labels = torch.arange(10).to('cuda')
+            latents = torch.zeros(10, 126, 512).to('cuda')
             with torch.no_grad():
-                images = generate(400, noise, latents, model)
+                images = generate(400, noise, latents, model, labels)
             images = images.cpu() * 0.5 + 0.5
             torchvision.utils.save_image(images, f"images/{i}.png", nrow=4)
             model.train()

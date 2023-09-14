@@ -59,12 +59,15 @@ class RIN(nn.Module):
         
         self.timestep_embed = ScalarEmbedding(1, self.latent_dim)
         
+        # class conditional
+        self.condition_embedding = nn.Embedding(10, self.latent_dim)
+        
         self.blocks = nn.ModuleList()
         
         for _ in range(self.num_blocks):
             self.blocks.append(RINBlock(self.embed_dim, self.latent_dim, self.num_layers_per_block))
             
-    def forward(self, input, timestep, prev_latents = None):
+    def forward(self, input, timestep, condition, prev_latents = None):
         
         # encode input into embeddings
         #embeddings = self.input_conv(input)
@@ -84,6 +87,11 @@ class RIN(nn.Module):
         ts_embed = self.timestep_embed(timestep[:, None])
         
         latents = torch.concat([latents, ts_embed], dim=1)
+        
+        # add class conditioning
+        condition_embed = self.condition_embedding(condition[:, None])
+        
+        latents = torch.concat([latents, condition_embed], dim=1)
             
         for block in self.blocks:
             embeddings, latents = block(embeddings, latents)
@@ -94,7 +102,7 @@ class RIN(nn.Module):
         #image = patches.transpose(1, 2).reshape(-1, 3, self.img_size, self.img_size)
         image = self.output_rearrange(patches)
         
-        return image, latents[:, :-1]
+        return image, latents[:, :-2]
             
         
         
