@@ -8,8 +8,29 @@ from torchvision.datasets import ImageFolder
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm, trange
 import numpy as np
+from copy import deepcopy
 
 from model.model import RIN
+
+# from k-diffusion
+
+@torch.no_grad()
+def ema_update(model, averaged_model, decay):
+    """Incorporates updated model parameters into an exponential moving averaged
+    version of a model. It should be called after each optimizer step."""
+    model_params = dict(model.named_parameters())
+    averaged_params = dict(averaged_model.named_parameters())
+    assert model_params.keys() == averaged_params.keys()
+
+    for name, param in model_params.items():
+        averaged_params[name].mul_(decay).add_(param, alpha=1 - decay)
+
+    model_buffers = dict(model.named_buffers())
+    averaged_buffers = dict(averaged_model.named_buffers())
+    assert model_buffers.keys() == averaged_buffers.keys()
+
+    for name, buf in model_buffers.items():
+        averaged_buffers[name].copy_(buf)
 
 def infinite_generator(dataloader):
     while True:
@@ -80,6 +101,9 @@ if __name__ == "__main__":
     # similar to CIFAR-10 config from authors
     model = RIN(img_size=32, patch_size=2, num_latents=126, latent_dim=512, embed_dim=128, num_blocks=3, num_layers_per_block=2).to('cuda')
 
+    model_ema = deepcopy(model)
+    model_ema.eval()
+    
     tf = transforms.Compose([
         transforms.ToTensor(),
     ])
@@ -126,6 +150,8 @@ if __name__ == "__main__":
         
         optim.step()
         
+        ema_update(model, model_ema, 0.9995)
+        
         pbar.set_description(f"loss: {loss.item():.4f}")
         
         if i % 500 == 0:
@@ -134,7 +160,7 @@ if __name__ == "__main__":
             labels = torch.arange(10).to('cuda')
             latents = torch.zeros(10, 126, 512).to('cuda')
             with torch.no_grad():
-                images = generate(400, noise, latents, model, labels)
+                images = generate(400, noise, latents, model_ema, labels)
             images = images.cpu() * 0.5 + 0.5
             torchvision.utils.save_image(images, f"images/{i}.png", nrow=4)
             model.train()
