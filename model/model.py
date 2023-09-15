@@ -39,7 +39,7 @@ class RIN(nn.Module):
         self.num_layers_per_block = num_layers_per_block
         
         self.input_linear = nn.Linear(3 * patch_size * patch_size, embed_dim)
-        self.input_ln = nn.LayerNorm(self.embed_dim) # not sure about this, but it's in the paper (https://github.com/crowsonkb mentioned in EAI discord that a similar LN before patching in ViT diffuion models caused some artifacts)
+        #self.input_ln = nn.LayerNorm(self.embed_dim) # not sure about this, but it's in the paper (https://github.com/crowsonkb mentioned in EAI discord that a similar LN before patching in ViT diffuion models caused some artifacts)
         self.input_rearrange = Rearrange('b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1 = patch_size, p2 = patch_size)
 
         
@@ -75,7 +75,8 @@ class RIN(nn.Module):
         embeddings = self.input_rearrange(input)
         embeddings = self.input_linear(embeddings)
         # add pos embed & ln
-        embeddings = self.input_ln(embeddings) + self.pos_embedding
+        #embeddings = self.input_ln(embeddings) + self.pos_embedding
+        embeddings = embeddings + self.pos_embedding
         
         latents = self.latents.repeat(embeddings.shape[0], 1, 1)
 
