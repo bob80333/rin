@@ -168,7 +168,6 @@ if __name__ == "__main__":
         labels = labels.to('cuda')
         batch = batch * 2 - 1
 
-        #timestep = torch.rand(batch.shape[0]).to(device)
         timestep = stratified_uniform(batch.shape[:1]).to(device)
         noise = torch.randn_like(batch).to(device)
 
