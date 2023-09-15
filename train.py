@@ -149,15 +149,15 @@ if __name__ == "__main__":
     ])
 
     dataset = CIFAR10(root="data", download=True, transform=tf, train=True)
-    dataloader = DataLoader(dataset, batch_size=64,
+    dataloader = DataLoader(dataset, batch_size=256,
                             shuffle=True, num_workers=4)
     generator = infinite_generator(dataloader)
 
-    optim = AdamW(model.parameters(), lr=3e-4,
-                  weight_decay=1e-2, betas=(0.9, 0.99))
+    optim = AdamW(model.parameters(), lr=3e-3,
+                  weight_decay=1e-2, betas=(0.9, 0.999))
     loss_fn = torch.nn.MSELoss()
 
-    n_steps = 1_001
+    n_steps = 150_001
 
     pbar = trange(n_steps)
 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
         optim.step()
 
-        ema_update(model, model_ema, 0.9995)
+        ema_update(model, model_ema, 0.9999)
 
         pbar.set_description(f"loss: {loss.item():.4f}")
 
@@ -208,5 +208,8 @@ if __name__ == "__main__":
             images = images.cpu() * 0.5 + 0.5
             torchvision.utils.save_image(images, f"images/{i}.png", nrow=4)
             model.train()
+            torch.save(model_ema, "model.pt")
 
         wandb.log({"loss": loss.item()}, step=i)
+    
+    torch.save(model_ema, "model.pt")
