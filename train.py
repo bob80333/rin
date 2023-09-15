@@ -133,6 +133,7 @@ def generate(steps, noise, latents, model, conditioning):
 
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
 
     wandb.init(project="rin")
 
@@ -167,10 +168,8 @@ if __name__ == "__main__":
         labels = labels.to('cuda')
         batch = batch * 2 - 1
 
-        timestep = torch.rand(batch.shape[0]).to(device)
-        timestep2 = stratified_uniform(batch.shape[0])
-        print(timestep)
-        print(timestep2)
+        #timestep = torch.rand(batch.shape[0]).to(device)
+        timestep = stratified_uniform(batch.shape[:1]).to(device)
         noise = torch.randn_like(batch).to(device)
 
         noised_batch = torch.sqrt(gamma(timestep[:, None, None, None])) * batch + torch.sqrt(
