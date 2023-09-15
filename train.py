@@ -155,7 +155,7 @@ if __name__ == "__main__":
     
     # lr warmup scheduler
 
-    optim = AdamW(model.parameters(), lr=3e-3,
+    optim = AdamW(model.parameters(), lr=1e-3,
                   weight_decay=1e-2, betas=(0.9, 0.999))
     
     scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lambda x: min(1, x / 10000))
