@@ -13,6 +13,28 @@ from tqdm import tqdm, trange
 
 from model.model import RIN
 
+# from k-diffusion discord channel in eleutherai
+
+import torch.distributed as dist
+
+def stratified_uniform(shape, grad_accum_steps=1, grad_accum_step=0, group=None, world_size=None, rank=None, dtype=None, device=None):
+    """Draws stratified samples from a uniform distribution. The strata are not duplicated
+    across processes or gradient accumulation steps."""
+    if dist.is_available() and dist.is_initialized():
+        world_size = dist.get_world_size(group) if world_size is None else world_size
+        rank = dist.get_rank(group) if rank is None else rank
+    else:
+        world_size = 1 if world_size is None else world_size
+        rank = 0 if rank is None else rank
+    world_size = world_size * grad_accum_steps
+    rank = rank * grad_accum_steps + grad_accum_step
+    n = shape[-1] * world_size
+    start = rank * n // world_size
+    end = (rank + 1) * n // world_size
+    offsets = torch.linspace(0, 1, n + 1, dtype=dtype, device=device)[start:end]
+    u = torch.rand(shape, dtype=dtype, device=device)
+    return torch.clamp(offsets + u / n, 0, 1)
+
 # from k-diffusion
 
 device = 'cuda'
@@ -146,6 +168,9 @@ if __name__ == "__main__":
         batch = batch * 2 - 1
 
         timestep = torch.rand(batch.shape[0]).to(device)
+        timestep2 = stratified_uniform(batch.shape[0])
+        print(timestep)
+        print(timestep2)
         noise = torch.randn_like(batch).to(device)
 
         noised_batch = torch.sqrt(gamma(timestep[:, None, None, None])) * batch + torch.sqrt(
