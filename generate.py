@@ -62,7 +62,7 @@ latents = torch.zeros(10, 16, 126, 512).to(device)
 
 for i in range(10):
     
-    labels = torch.ones(16).to(device) * i
+    labels = torch.ones(16).long().to(device) * i
     
     with torch.inference_mode():
         images = generate(400, noise[i], latents[i], model, labels)
