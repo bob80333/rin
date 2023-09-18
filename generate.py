@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torchvision
-
+from tqdm import trange
 device = 'cuda'
 
 
