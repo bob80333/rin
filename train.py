@@ -149,14 +149,14 @@ if __name__ == "__main__":
     ])
 
     dataset = CIFAR10(root="data", download=True, transform=tf, train=True)
-    dataloader = DataLoader(dataset, batch_size=256,
+    dataloader = DataLoader(dataset, batch_size=128,
                             shuffle=True, num_workers=4)
     generator = infinite_generator(dataloader)
     
     # lr warmup scheduler
 
-    optim = AdamW(model.parameters(), lr=1e-3,
-                  weight_decay=1e-2, betas=(0.9, 0.999))
+    optim = AdamW(model.parameters(), lr=3e-4,
+                  weight_decay=1e-2, betas=(0.9, 0.99))
     
     scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lambda x: min(1, x / 10000))
 
