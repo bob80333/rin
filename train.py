@@ -183,7 +183,7 @@ if __name__ == "__main__":
 
         if torch.rand(1) < 0.9:
             # self conditioning
-            with torch.autocast(torch.bf16):
+            with torch.autocast(device, dtype=torch.bfloat16):
                 with torch.no_grad():
                     _, latents = model(noised_batch, timestep, labels)
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
 
         optim.zero_grad()
         # print(latents.shape)
-        with torch.autocast(torch.bf16):
+        with torch.autocast(device, dtype=torch.bfloat16):
             pred, _ = model(noised_batch, timestep, labels, latents)
 
             # eps style (predicting noise) as in paper, but supposedly v-pred is usually better (try later?)
