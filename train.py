@@ -149,14 +149,16 @@ if __name__ == "__main__":
     ])
 
     dataset = CIFAR10(root="data", download=True, transform=tf, train=True)
-    dataloader = DataLoader(dataset, batch_size=128,
-                            shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=256,
+                            shuffle=True, num_workers=4, persistent_workers=True)
     generator = infinite_generator(dataloader)
     
-    # lr warmup scheduler
+    # optim
 
-    optim = AdamW(model.parameters(), lr=3e-4,
-                  weight_decay=1e-2, betas=(0.9, 0.99))
+    optim = AdamW(model.parameters(), lr=3e-3,
+                  weight_decay=1e-2, betas=(0.9, 0.999))
+                  
+    # lr warmup scheduler
     
     scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lambda x: min(1, x / 10000))
 
@@ -181,19 +183,21 @@ if __name__ == "__main__":
 
         if torch.rand(1) < 0.9:
             # self conditioning
-            with torch.no_grad():
-                _, latents = model(noised_batch, timestep, labels)
+            with torch.autocast(torch.bf16):
+                with torch.no_grad():
+                    _, latents = model(noised_batch, timestep, labels)
 
         else:
             latents = None
 
         optim.zero_grad()
         # print(latents.shape)
-        pred, _ = model(noised_batch, timestep, labels, latents)
+        with torch.autocast(torch.bf16):
+            pred, _ = model(noised_batch, timestep, labels, latents)
 
-        # eps style (predicting noise) as in paper, but supposedly v-pred is usually better (try later?)
+            # eps style (predicting noise) as in paper, but supposedly v-pred is usually better (try later?)
 
-        loss = loss_fn(pred, noise)
+            loss = loss_fn(pred, noise)
         loss.backward()
 
         optim.step()
