@@ -13,6 +13,8 @@ from tqdm import tqdm, trange
 
 from model.model import RIN
 
+from lamb import Lamb
+
 # from k-diffusion discord channel in eleutherai
 
 import torch.distributed as dist
@@ -155,9 +157,12 @@ if __name__ == "__main__":
     
     # optim
 
-    optim = AdamW(model.parameters(), lr=3e-3,
-                  weight_decay=1e-2, betas=(0.9, 0.999))
-                  
+    #optim = AdamW(model.parameters(), lr=3e-3,
+    #              weight_decay=1e-2, betas=(0.9, 0.999))
+    
+    # not sure if wd scaled by lr or not, so will try both
+    optim = Lamb(model.parameters(), lr=3e-3, betas=(0.9, 0.999), weight_decay=1e-2)
+    
     # lr warmup scheduler
     
     scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lambda x: min(1, x / 10000))
