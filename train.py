@@ -161,7 +161,7 @@ if __name__ == "__main__":
     #              weight_decay=1e-2, betas=(0.9, 0.999))
     
     # not sure if wd scaled by lr or not, so will try both
-    optim = Lamb(model.parameters(), lr=3e-3, betas=(0.9, 0.999), weight_decay=1e-2)
+    optim = Lamb(model.parameters(), lr=3e-3, betas=(0.9, 0.999), weight_decay=3e-5)
     
     # lr warmup scheduler
     
