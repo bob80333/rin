@@ -132,7 +132,64 @@ def generate(steps, noise, latents, model, conditioning):
         # Estimate x at t_m1.
         x_t = ddpm_step_lucidrains(x_t, eps_pred, t, t_m1)
     return x_t
+    
+# pytorch conversion of the WarmUpAndDecay class from Pix2Seq where the official RIN impl is
 
+import torch
+
+class WarmUpAndDecay(object):
+    """Applies a warm-up schedule on a given learning rate decay schedule."""
+
+    def __init__(self, optimizer, base_learning_rate, learning_rate_scaling, batch_size, learning_rate_schedule, warmup_steps, total_steps, tail_steps=0, end_lr_factor=0.):
+
+        self.optimizer = optimizer
+        self.schedule = learning_rate_schedule
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+        self.tail_steps = tail_steps
+        self.end_lr_factor = end_lr_factor
+
+        if learning_rate_scaling == 'linear':
+            self.base_lr = base_learning_rate * batch_size / 256.
+        elif learning_rate_scaling == 'sqrt':
+            self.base_lr = base_learning_rate * math.sqrt(batch_size)
+        elif learning_rate_scaling == 'none':
+            self.base_lr = base_learning_rate
+        else:
+            raise ValueError('Unknown learning rate scaling {}'.format(learning_rate_scaling))
+
+        self.lr_lambda = self._get_lr_lambda()
+
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, self.lr_lambda)
+
+    def _get_lr_lambda(self):
+
+        def lr_lambda(step):
+            if step <= self.warmup_steps:
+                return step / self.warmup_steps
+
+            decay_steps = self.total_steps - self.warmup_steps - self.tail_steps
+
+            if self.schedule == 'linear':
+                end_lr = self.end_lr_factor * self.base_lr
+                return end_lr + (self.base_lr - end_lr) * (1 - (step - self.warmup_steps) / decay_steps)
+
+            elif self.schedule == 'cosine':
+                return (1 + math.cos(math.pi * (step - self.warmup_steps) / decay_steps)) / 2 * (1 - self.end_lr_factor) + self.end_lr_factor
+
+            elif self.schedule == 'none':
+                return 1.
+            else:
+                # Here you can add more learning rate decay policies using if condition
+                raise ValueError('Unknown learning rate decay schedule {}'.format(self.schedule))
+
+        return lr_lambda
+
+    def step(self):
+        self.scheduler.step()
+        
+    def get_last_lr():
+        return self.scheduler.get_last_lr()
 
 if __name__ == "__main__":
     torch.manual_seed(42)
@@ -160,16 +217,17 @@ if __name__ == "__main__":
     #optim = AdamW(model.parameters(), lr=3e-3,
     #              weight_decay=1e-2, betas=(0.9, 0.999))
     
-    # not sure if wd scaled by lr or not, so will try both
-    optim = Lamb(model.parameters(), lr=3e-3, betas=(0.9, 0.999), weight_decay=3e-5)
+    optim = Lamb(model.parameters(), lr=3e-3, betas=(0.9, 0.999), weight_decay=1e-2)
     
-    # lr warmup scheduler
+    # lr & decay warmup scheduler
     
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lambda x: min(1, x / 10000))
+    #scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lambda x: min(1, x / 10000))
+    n_steps = 150_001
+
+    scheduler = WarmUpAndDecay(optim, 3e-3, 'none', 256, 'cosine@0.8', 10_000, n_steps, 0.0, 0.0)
 
     loss_fn = torch.nn.MSELoss()
 
-    n_steps = 150_001
 
     pbar = trange(n_steps)
 
@@ -224,6 +282,6 @@ if __name__ == "__main__":
             model.train()
             torch.save(model_ema, "model.pt")
 
-        wandb.log({"loss": loss.item()}, step=i)
+        wandb.log({"loss": loss.item(), "lr": scheduler.get_last_lr()}, step=i)
     
     torch.save(model_ema, "model.pt")
