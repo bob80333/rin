@@ -188,7 +188,7 @@ class WarmUpAndDecay(object):
     def step(self):
         self.scheduler.step()
         
-    def get_last_lr():
+    def get_last_lr(self):
         return self.scheduler.get_last_lr()
 
 if __name__ == "__main__":
@@ -282,6 +282,6 @@ if __name__ == "__main__":
             model.train()
             torch.save(model_ema, "model.pt")
 
-        wandb.log({"loss": loss.item(), "lr": scheduler.get_last_lr()}, step=i)
+        wandb.log({"loss": loss.item(), "lr": scheduler.get_last_lr()[0]}, step=i)
     
     torch.save(model_ema, "model.pt")
