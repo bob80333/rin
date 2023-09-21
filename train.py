@@ -134,62 +134,86 @@ def generate(steps, noise, latents, model, conditioning):
     return x_t
     
 # pytorch conversion of the WarmUpAndDecay class from Pix2Seq where the official RIN impl is
+import math
+from torch.optim.lr_scheduler import _LRScheduler
 
-import torch
 
-class WarmUpAndDecay(object):
-    """Applies a warm-up schedule on a given learning rate decay schedule."""
+class PolynomialDecayLR(_LRScheduler):
+    def __init__(self, optimizer, max_steps, end_lr_factor=0., last_epoch=-1):
+        self.max_steps = max_steps
+        self.end_lr = optimizer.defaults['lr'] * end_lr_factor
+        super(PolynomialDecayLR, self).__init__(optimizer, last_epoch)
 
-    def __init__(self, optimizer, base_learning_rate, learning_rate_scaling, batch_size, learning_rate_schedule, warmup_steps, total_steps, tail_steps=0, end_lr_factor=0.):
+    def get_lr(self):
+        return [base_lr * ((1. - self.last_epoch / self.max_steps) ** 2)
+                for base_lr in self.base_lrs]
 
-        self.optimizer = optimizer
-        self.schedule = learning_rate_schedule
-        self.warmup_steps = warmup_steps
-        self.total_steps = total_steps
-        self.tail_steps = tail_steps
-        self.end_lr_factor = end_lr_factor
+class CosineDecayLR(_LRScheduler):
+    def __init__(self, optimizer, max_steps, alpha=0., last_epoch=-1):
+        self.max_steps = max_steps
+        self.alpha = alpha
+        super(CosineDecayLR, self).__init__(optimizer, last_epoch)
 
+    def get_lr(self):
+        return [self.alpha + (base_lr - self.alpha) *
+               (1 + math.cos(math.pi * self.last_epoch / self.max_steps)) / 2
+               for base_lr in self.base_lrs]
+
+class ExponentialDecayLR(_LRScheduler):
+    def __init__(self, optimizer, max_steps, decay_steps, last_epoch=-1):
+        self.decay_steps = decay_steps
+        super(ExponentialDecayLR, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        return [base_lr * (decay_rate ** (self.last_epoch / self.decay_steps))
+                for base_lr, decay_rate in zip(self.base_lrs, self.decay_steps)]
+                
+
+
+class WarmUpAndDecay:
+    def __init__(self, optimizer, base_learning_rate, learning_rate_scaling, batch_size, 
+                 learning_rate_schedule, warmup_steps, total_steps, tail_steps=0,
+                 end_lr_factor=0.):
         if learning_rate_scaling == 'linear':
             self.base_lr = base_learning_rate * batch_size / 256.
         elif learning_rate_scaling == 'sqrt':
             self.base_lr = base_learning_rate * math.sqrt(batch_size)
-        elif learning_rate_scaling == 'none':
-            self.base_lr = base_learning_rate
         else:
-            raise ValueError('Unknown learning rate scaling {}'.format(learning_rate_scaling))
+            self.base_lr = base_learning_rate
 
-        self.lr_lambda = self._get_lr_lambda()
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+        self.end_lr_factor = end_lr_factor
+        if learning_rate_schedule == 'linear':
+            self.schedule = PolynomialDecayLR(optimizer, total_steps - warmup_steps - tail_steps, end_lr_factor)
+        elif learning_rate_schedule == 'cosine':
+            self.schedule = CosineDecayLR(optimizer, total_steps - warmup_steps - tail_steps, end_lr_factor)
+        elif learning_rate_schedule.startswith('cosine@'):
+            rate = float(learning_rate_schedule.split('@')[1])
+            self.schedule = CosineDecayLR(optimizer, (total_steps - warmup_steps - tail_steps) / rate, end_lr_factor)
+        elif learning_rate_schedule.startswith('exp@'):
+            assert tail_steps == 0, 'tail_steps={tail_steps} is not effective for exp schedule.'
+            rate = float(learning_rate_schedule.split('@')[1])
+            self.schedule = ExponentialDecayLR(optimizer, total_steps - warmup_steps, rate)
+        else:
+            self.schedule = None
 
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, self.lr_lambda)
-
-    def _get_lr_lambda(self):
-
-        def lr_lambda(step):
-            if step <= self.warmup_steps:
-                return step / self.warmup_steps
-
-            decay_steps = self.total_steps - self.warmup_steps - self.tail_steps
-
-            if self.schedule == 'linear':
-                end_lr = self.end_lr_factor * self.base_lr
-                return end_lr + (self.base_lr - end_lr) * (1 - (step - self.warmup_steps) / decay_steps)
-
-            elif self.schedule == 'cosine':
-                return (1 + math.cos(math.pi * (step - self.warmup_steps) / decay_steps)) / 2 * (1 - self.end_lr_factor) + self.end_lr_factor
-
-            elif self.schedule == 'none':
-                return 1.
-            else:
-                # Here you can add more learning rate decay policies using if condition
-                raise ValueError('Unknown learning rate decay schedule {}'.format(self.schedule))
-
-        return lr_lambda
-
-    def step(self):
-        self.scheduler.step()
-        
-    def get_last_lr(self):
-        return self.scheduler.get_last_lr()
+    def step(self, global_step): 
+        if self.schedule is None: # no decay
+            return self.base_lr
+        elif global_step < self.warmup_steps: # warmup phase
+            return self.base_lr * (float(global_step) / float(self.warmup_steps))
+        else: # decay phase
+            self.schedule.step(global_step - self.warmup_steps)
+            return self.schedule.get_last_lr()[0]
+            
+    def get_last_lr(self, global_step):
+        if self.schedule is None: # no decay
+            return self.base_lr
+        elif global_step < self.warmup_steps: # warmup phase
+            return self.base_lr * (float(global_step) / float(self.warmup_steps))
+        else: # decay phase
+            return self.schedule.get_last_lr()[0]
 
 if __name__ == "__main__":
     torch.manual_seed(42)
@@ -264,7 +288,7 @@ if __name__ == "__main__":
         loss.backward()
 
         optim.step()
-        scheduler.step()
+        scheduler.step(i)
 
         ema_update(model, model_ema, 0.9999)
 
@@ -282,6 +306,6 @@ if __name__ == "__main__":
             model.train()
             torch.save(model_ema, "model.pt")
 
-        wandb.log({"loss": loss.item(), "lr": scheduler.get_last_lr()[0]}, step=i)
+        wandb.log({"loss": loss.item(), "lr": scheduler.get_last_lr(i)}, step=i)
     
     torch.save(model_ema, "model.pt")
